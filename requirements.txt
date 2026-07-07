@@ -9,3 +9,11 @@ plotly
 google-genai
 requests
 numpy
+streamlit
+pandas
+google-genai
+faiss-cpu
+sentence-transformers
+plotly
+matplotlib
+seaborn
