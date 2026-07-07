@@ -338,7 +338,14 @@ Rules:
 - No imports, no file/network access, no exec/eval.
 Return ONLY the code, no markdown fences."""
 
-    response = client.models.generate_content(model=MODEL_NAME, contents=prompt)
+    # --- THE NEW TRY/EXCEPT BLOCK GOES HERE ---
+    try:
+        response = client.models.generate_content(model=MODEL_NAME, contents=prompt)
+    except Exception as e:
+        # If Google rejects the API call (e.g., bad key, region block), return the exact error.
+        return None, "", f"Gemini API connection failed: {str(e)}"
+    # ------------------------------------------
+
     code = response.text.strip()
     code = re.sub(r"^```python|```$", "", code, flags=re.MULTILINE).strip()
 
