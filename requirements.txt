@@ -1,0 +1,11 @@
+streamlit
+sentence-transformers
+faiss-cpu
+pdfplumber
+python-docx
+pandas
+openpyxl
+plotly
+google-genai
+requests
+numpy
