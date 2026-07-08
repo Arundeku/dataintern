@@ -363,46 +363,59 @@ Return ONLY the code, no markdown fences."""
 # Plain-text RAG answer with citations
 # ----------------------------------------------------------------------------
 def answer_with_rag(question, history):
-    # 1. We still search for files, but we don't stop if we find nothing!
     chunks = retrieve(question, k=6)
-    
-    # 2. If there are chunks, format them. If not, just send an empty string.
-    if chunks:
-        context = "\n\n".join(f"[{c['source']}]\n{c['text']}" for c in chunks)
-    else:
-        context = "No specific document context found for this query."
+    if not chunks:
+        return "I don't see that in your files.", []
 
+    context = "\n\n".join(f"[{c['source']}]\n{c['text']}" for c in chunks)
     history_block = "\n".join(f"{m['role']}: {m['content']}" for m in history[-6:])
 
-    # 3. We update the prompt to allow conversational AI behavior
-    prompt = f"""You are a helpful and conversational business assistant named DataIntern.
+    prompt = f"""You are a business data assistant. Answer ONLY using the context below.
+If the answer isn't in the context, say exactly: "I don't see that in your files."
+Cite the source in square brackets like [filename · sheet/page/row] after each claim.
 
-    Rules for answering:
-    1. If the user is just saying hello or making casual conversation, respond naturally and politely.
-    2. If the user asks a factual or general business question, answer it to the best of your ability.
-    3. If the user is specifically asking about their own data, use the "Context" below to answer. 
-    4. Whenever you use the Context to answer, cite the source in square brackets like [filename · sheet/page/row].
-    5. If they ask about their data but the Context doesn't have the answer, politely tell them you couldn't find it in their uploaded files.
+Conversation so far:
+{history_block}
 
-    Conversation so far:
-    {history_block}
+Context:
+{context}
 
-    Context:
-    {context}
-
-    Question: {question}
-    Answer:"""
+Question: {question}
+Answer:"""
 
     placeholder = st.empty()
     full_text = ""
-    
-    # Generate the stream just like before
     for chunk in client.models.generate_content_stream(model=MODEL_NAME, contents=prompt):
         if chunk.text:
             full_text += chunk.text
             placeholder.markdown(full_text)
-            
     return full_text, chunks
+
+
+# ----------------------------------------------------------------------------
+# Charts
+# ----------------------------------------------------------------------------
+def make_chart(df, question):
+    prompt = f"""Given a table with columns {list(df.columns)} and this request: "{question}",
+respond ONLY with JSON like: {{"chart_type": "bar", "x": "<column name>", "y": "<column name or null>"}}
+chart_type must be one of: bar, line, pie, scatter."""
+    response = client.models.generate_content(model=MODEL_NAME, contents=prompt)
+    spec_text = re.sub(r"^```json|```$", "", response.text.strip(), flags=re.MULTILINE).strip()
+    try:
+        spec = json.loads(spec_text)
+    except Exception:
+        spec = {"chart_type": "bar", "x": df.columns[0], "y": df.columns[1] if len(df.columns) > 1 else None}
+
+    ctype, x, y = spec.get("chart_type", "bar"), spec.get("x"), spec.get("y")
+    if ctype == "pie":
+        fig = px.pie(df, names=x, values=y)
+    elif ctype == "line":
+        fig = px.line(df, x=x, y=y)
+    elif ctype == "scatter":
+        fig = px.scatter(df, x=x, y=y)
+    else:
+        fig = px.bar(df, x=x, y=y)
+    return fig
 
 # ----------------------------------------------------------------------------
 # Chat UI
